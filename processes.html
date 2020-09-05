@@ -1,0 +1,381 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Processes &#8212; Luv  documentation</title>
+    <link rel="stylesheet" href="static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="static/documentation_options.js"></script>
+    <script type="text/javascript" src="static/jquery.js"></script>
+    <script type="text/javascript" src="static/underscore.js"></script>
+    <script type="text/javascript" src="static/doctools.js"></script>
+    <script type="text/javascript" src="static/language_data.js"></script>
+    <link rel="author" title="About these documents" href="about.html" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="About" href="about.html" />
+    <link rel="prev" title="Threads" href="threads.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="about.html" title="About"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="threads.html" title="Threads"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Luv  documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="processes">
+<h1>Processes<a class="headerlink" href="#processes" title="Permalink to this headline">¶</a></h1>
+<p>libuv offers cross-platform process management, which is exposed in
+<a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html">Luv.Process</a>.</p>
+<div class="section" id="spawning-child-processes">
+<h2>Spawning child processes<a class="headerlink" href="#spawning-child-processes" title="Permalink to this headline">¶</a></h2>
+<p>To spawn a process, use <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-spawn">Luv.Process.spawn</a>:</p>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/spawn.ml">spawn.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="n">spawn</span> <span class="s2">&quot;sleep&quot;</span> <span class="o">[</span><span class="s2">&quot;sleep&quot;</span><span class="o">;</span> <span class="s2">&quot;1&quot;</span><span class="o">]);</span>
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+<p>The reason this mysteriously short program waits for the child <code class="docutils literal notranslate"><span class="pre">sleep</span></code> process
+to exit is that <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-spawn">Luv.Process.spawn</a> creates
+a <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html">Luv.Process.t</a> handle and registers it with the
+event loop, which we then run with <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Loop/index.html#val-run">Luv.Loop.run</a>. It is <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Loop/index.html#val-run">Luv.Loop.run</a>
+that waits. The process handle is also returned to us, but, in this example, we
+call <code class="docutils literal notranslate"><span class="pre">ignore</span></code> on it on line 2.</p>
+<p><a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-spawn">Luv.Process.spawn</a> has a large number of
+optional arguments for controlling the child process’ working directory,
+environment variables, and so on. Three of the optional arguments deserve some
+extra attention:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">?on_exit</span></code>, if supplied, is called when the process terminates.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">?detached:true</span></code> makes the child process fully independent of the parent; in
+particular, the parent can exit without killing the child.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">?redirect</span></code> is the subject of the next section.</p></li>
+</ul>
+</div>
+<div class="section" id="child-process-i-o">
+<h2>Child process I/O<a class="headerlink" href="#child-process-i-o" title="Permalink to this headline">¶</a></h2>
+<p>By default, the standard file descriptors of a child process all point to
+<code class="docutils literal notranslate"><span class="pre">/dev/null</span></code>, or <code class="docutils literal notranslate"><span class="pre">NUL</span></code> on Windows. You can use the <code class="docutils literal notranslate"><span class="pre">?redirect</span></code> argument of
+<a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-spawn">Luv.Process.spawn</a> to change this.</p>
+<p>For example, to share the parent’s <code class="docutils literal notranslate"><span class="pre">STDOUT</span></code> with the child:</p>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/stdout.ml">stdout.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="k">let</span> <span class="n">redirect</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="o">[</span>
+    <span class="n">inherit_fd</span> <span class="o">~</span><span class="n">fd</span><span class="o">:</span><span class="n">stdout</span> <span class="o">~</span><span class="n">from_parent_fd</span><span class="o">:</span><span class="n">stdout</span> <span class="bp">()</span>
+  <span class="o">]</span>
+  <span class="k">in</span>
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="n">spawn</span> <span class="o">~</span><span class="n">redirect</span> <span class="s2">&quot;echo&quot;</span> <span class="o">[</span><span class="s2">&quot;echo&quot;</span><span class="o">;</span> <span class="s2">&quot;Hello,&quot;</span><span class="o">;</span> <span class="s2">&quot;world!&quot;</span><span class="o">]);</span>
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+<p>A variant of <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-inherit_fd">Luv.Process.inherit_fd</a>
+is <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-inherit_stream">Luv.Process.inherit_stream</a>. It
+does the same thing, but the function, rather than taking a raw file descriptor,
+extracts a file descriptor from a libuv stream you already have in the parent
+(for example, a TCP socket or a pipe).</p>
+<p>The alternative to this is to connect a file descriptor in the child to a pipe
+in the parent. The difference between having a child <em>inherit</em> a pipe, and
+creating a pipe <em>between</em> parent and child, is, of course, that…</p>
+<ul class="simple">
+<li><p>When inheriting a pipe, the read end in the child is the same as the read end
+in the parent, and likewise for the write end, and the communication is
+typically with some third party.</p></li>
+<li><p>When creating a pipe for parent-child communication, the read end in the
+child is connected to the <em>write</em> end in the parent, and vice versa.</p></li>
+</ul>
+<p>For this, you need to first create a <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Pipe/index.html#type-t">Luv.Pipe.t</a>,
+which is a kind of libuv stream. So, reading from and writing to it are done the
+same way as for <a class="reference internal" href="networking.html#tcp"><span class="std std-ref">TCP sockets</span></a>.</p>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/pipe.ml">pipe.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="k">let</span> <span class="n">pipe</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Pipe</span><span class="p">.</span><span class="n">init</span> <span class="bp">()</span> <span class="o">|&gt;</span> <span class="nn">Result</span><span class="p">.</span><span class="n">get_ok</span> <span class="k">in</span>
+
+  <span class="k">let</span> <span class="n">redirect</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="o">[</span>
+<span class="hll">    <span class="n">to_parent_pipe</span> <span class="o">~</span><span class="n">fd</span><span class="o">:</span><span class="n">stdout</span> <span class="o">~</span><span class="n">parent_pipe</span><span class="o">:</span><span class="n">pipe</span> <span class="bp">()</span>
+</span>  <span class="o">]</span>
+  <span class="k">in</span>
+<span class="hll">  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="n">spawn</span> <span class="o">~</span><span class="n">redirect</span> <span class="s2">&quot;echo&quot;</span> <span class="o">[</span><span class="s2">&quot;echo&quot;</span><span class="o">;</span> <span class="s2">&quot;Hello,&quot;</span><span class="o">;</span> <span class="s2">&quot;world!&quot;</span><span class="o">]);</span>
+</span>
+<span class="hll">  <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">read_start</span> <span class="n">pipe</span> <span class="k">begin</span> <span class="k">function</span>
+</span>    <span class="o">|</span> <span class="nc">Error</span> <span class="o">`</span><span class="nc">EOF</span> <span class="o">-&gt;</span>
+      <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">pipe</span> <span class="n">ignore</span><span class="o">;</span>
+    <span class="o">|</span> <span class="nc">Error</span> <span class="n">e</span> <span class="o">-&gt;</span>
+      <span class="nn">Printf</span><span class="p">.</span><span class="n">eprintf</span> <span class="s2">&quot;Read error: %s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Error</span><span class="p">.</span><span class="n">strerror</span> <span class="n">e</span><span class="o">);</span>
+      <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">pipe</span> <span class="n">ignore</span>
+    <span class="o">|</span> <span class="nc">Ok</span> <span class="n">buffer</span> <span class="o">-&gt;</span>
+<span class="hll">      <span class="n">print_string</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Buffer</span><span class="p">.</span><span class="n">to_string</span> <span class="n">buffer</span><span class="o">)</span>
+</span>  <span class="k">end</span><span class="o">;</span>
+
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+<div class="section" id="ipc">
+<h2>IPC<a class="headerlink" href="#ipc" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Pipe/index.html">Luv.Pipe</a> can also be used for general IPC between any
+two processes. For this, a <em>server</em> pipe has to be assigned a name using
+<a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Pipe/index.html#val-bind">Luv.Pipe.bind</a>, and the client connects with
+<a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Pipe/index.html#val-connect">Luv.Pipe.connect</a>. After that, the flow is
+largely the same as for <a class="reference internal" href="networking.html#tcp"><span class="std std-ref">TCP sockets</span></a>. Indeed, if you compare the
+examples below to the ones at section <a class="reference internal" href="networking.html#tcp"><span class="std std-ref">TCP</span></a>, you will see that only the
+first few lines of initialization are different. Almost everything else is the
+same, because both pipes and TCP sockets are libuv streams.</p>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/pipe_echo_server.ml">pipe_echo_server.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="k">let</span> <span class="n">server</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Pipe</span><span class="p">.</span><span class="n">init</span> <span class="bp">()</span> <span class="o">|&gt;</span> <span class="nn">Result</span><span class="p">.</span><span class="n">get_ok</span> <span class="k">in</span>
+<span class="hll">  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Pipe</span><span class="p">.</span><span class="n">bind</span> <span class="n">server</span> <span class="s2">&quot;echo-pipe&quot;</span><span class="o">);</span>
+</span>
+<span class="hll">  <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">listen</span> <span class="n">server</span> <span class="k">begin</span> <span class="k">function</span>
+</span>    <span class="o">|</span> <span class="nc">Error</span> <span class="n">e</span> <span class="o">-&gt;</span>
+      <span class="nn">Printf</span><span class="p">.</span><span class="n">eprintf</span> <span class="s2">&quot;Listen error: %s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Error</span><span class="p">.</span><span class="n">strerror</span> <span class="n">e</span><span class="o">)</span>
+    <span class="o">|</span> <span class="nc">Ok</span> <span class="bp">()</span> <span class="o">-&gt;</span>
+      <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Pipe</span><span class="p">.</span><span class="n">init</span> <span class="bp">()</span> <span class="o">|&gt;</span> <span class="nn">Result</span><span class="p">.</span><span class="n">get_ok</span> <span class="k">in</span>
+
+<span class="hll">      <span class="k">match</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">accept</span> <span class="o">~</span><span class="n">server</span> <span class="o">~</span><span class="n">client</span> <span class="k">with</span>
+</span>      <span class="o">|</span> <span class="nc">Error</span> <span class="o">_</span> <span class="o">-&gt;</span>
+        <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">client</span> <span class="n">ignore</span>
+      <span class="o">|</span> <span class="nc">Ok</span> <span class="bp">()</span> <span class="o">-&gt;</span>
+
+<span class="hll">        <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">read_start</span> <span class="n">client</span> <span class="k">begin</span> <span class="k">function</span>
+</span>          <span class="o">|</span> <span class="nc">Error</span> <span class="o">`</span><span class="nc">EOF</span> <span class="o">-&gt;</span>
+            <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">client</span> <span class="n">ignore</span>
+          <span class="o">|</span> <span class="nc">Error</span> <span class="n">e</span> <span class="o">-&gt;</span>
+            <span class="nn">Printf</span><span class="p">.</span><span class="n">eprintf</span> <span class="s2">&quot;Read error: %s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Error</span><span class="p">.</span><span class="n">strerror</span> <span class="n">e</span><span class="o">);</span>
+            <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">client</span> <span class="n">ignore</span>
+          <span class="o">|</span> <span class="nc">Ok</span> <span class="n">buffer</span> <span class="o">-&gt;</span>
+<span class="hll">            <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">write</span> <span class="n">client</span> <span class="o">[</span><span class="n">buffer</span><span class="o">]</span> <span class="o">(</span><span class="k">fun</span> <span class="o">_</span> <span class="o">-&gt;</span> <span class="n">ignore</span><span class="o">)</span>
+</span>        <span class="k">end</span>
+  <span class="k">end</span><span class="o">;</span>
+
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/pipe_hello_world.ml">pipe_hello_world.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="k">let</span> <span class="n">client</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Pipe</span><span class="p">.</span><span class="n">init</span> <span class="bp">()</span> <span class="o">|&gt;</span> <span class="nn">Result</span><span class="p">.</span><span class="n">get_ok</span> <span class="k">in</span>
+
+<span class="hll">  <span class="nn">Luv</span><span class="p">.</span><span class="nn">Pipe</span><span class="p">.</span><span class="n">connect</span> <span class="n">client</span> <span class="s2">&quot;echo-pipe&quot;</span> <span class="k">begin</span> <span class="k">function</span>
+</span>    <span class="o">|</span> <span class="nc">Error</span> <span class="n">e</span> <span class="o">-&gt;</span>
+      <span class="nn">Printf</span><span class="p">.</span><span class="n">eprintf</span> <span class="s2">&quot;Connect error: %s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Error</span><span class="p">.</span><span class="n">strerror</span> <span class="n">e</span><span class="o">)</span>
+    <span class="o">|</span> <span class="nc">Ok</span> <span class="bp">()</span> <span class="o">-&gt;</span>
+      <span class="k">let</span> <span class="n">message</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Buffer</span><span class="p">.</span><span class="n">from_string</span> <span class="s2">&quot;Hello, world!&quot;</span> <span class="k">in</span>
+<span class="hll">      <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">write</span> <span class="n">client</span> <span class="o">[</span><span class="n">message</span><span class="o">]</span> <span class="o">(</span><span class="k">fun</span> <span class="o">_</span><span class="n">result</span> <span class="o">_</span><span class="n">bytes_written</span> <span class="o">-&gt;</span>
+</span><span class="hll">        <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">shutdown</span> <span class="n">client</span> <span class="n">ignore</span><span class="o">);</span>
+</span>
+<span class="hll">      <span class="nn">Luv</span><span class="p">.</span><span class="nn">Stream</span><span class="p">.</span><span class="n">read_start</span> <span class="n">client</span> <span class="k">begin</span> <span class="k">function</span>
+</span>        <span class="o">|</span> <span class="nc">Error</span> <span class="o">`</span><span class="nc">EOF</span> <span class="o">-&gt;</span>
+          <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">client</span> <span class="n">ignore</span>
+        <span class="o">|</span> <span class="nc">Error</span> <span class="n">e</span> <span class="o">-&gt;</span>
+          <span class="nn">Printf</span><span class="p">.</span><span class="n">eprintf</span> <span class="s2">&quot;Read error: %s</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Error</span><span class="p">.</span><span class="n">strerror</span> <span class="n">e</span><span class="o">);</span>
+          <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">client</span> <span class="n">ignore</span>
+        <span class="o">|</span> <span class="nc">Ok</span> <span class="n">response</span> <span class="o">-&gt;</span>
+          <span class="n">print_endline</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Buffer</span><span class="p">.</span><span class="n">to_string</span> <span class="n">response</span><span class="o">)</span>
+      <span class="k">end</span>
+  <span class="k">end</span><span class="o">;</span>
+
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+<p>You can run the IPC server and client together with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dune</span> <span class="n">exec</span> <span class="n">example</span><span class="o">/</span><span class="n">pipe_echo_server</span><span class="o">.</span><span class="n">exe</span> <span class="o">&amp;</span>
+<span class="n">dune</span> <span class="n">exec</span> <span class="n">example</span><span class="o">/</span><span class="n">pipe_hello_world</span><span class="o">.</span><span class="n">exe</span>
+<span class="n">killall</span> <span class="n">pipe_echo_server</span><span class="o">.</span><span class="n">exe</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="signals">
+<h2>Signals<a class="headerlink" href="#signals" title="Permalink to this headline">¶</a></h2>
+<p>Despite its frightening name, <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Process/index.html#val-kill">Luv.Process.kill</a> only sends a signal to a given process:</p>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/send_signal.ml">send_signal.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="k">let</span> <span class="n">child</span> <span class="o">=</span>
+    <span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="n">spawn</span> <span class="s2">&quot;sleep&quot;</span> <span class="o">[</span><span class="s2">&quot;sleep&quot;</span><span class="o">;</span> <span class="s2">&quot;10&quot;</span><span class="o">]</span> <span class="o">|&gt;</span> <span class="nn">Result</span><span class="p">.</span><span class="n">get_ok</span> <span class="k">in</span>
+
+<span class="hll">  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Process</span><span class="p">.</span><span class="n">kill</span> <span class="n">child</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Signal</span><span class="p">.</span><span class="n">sigkill</span><span class="o">);</span>
+</span>
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+<p>Use <a class="reference external" href="https://aantron.github.io/luv/luv/Luv/Signal/index.html">Luv.Signal</a> to receive signals:</p>
+<p class="rubric"><a class="reference external" href="https://github.com/aantron/luv/blob/master/example/sigint.ml">sigint.ml</a></p>
+<div class="highlight-ocaml notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="k">let</span> <span class="bp">()</span> <span class="o">=</span>
+  <span class="k">let</span> <span class="n">handle</span> <span class="o">=</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Signal</span><span class="p">.</span><span class="n">init</span> <span class="bp">()</span> <span class="o">|&gt;</span> <span class="nn">Result</span><span class="p">.</span><span class="n">get_ok</span> <span class="k">in</span>
+
+<span class="hll">  <span class="n">ignore</span> <span class="o">@@</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Signal</span><span class="p">.</span><span class="n">start</span> <span class="n">handle</span> <span class="nn">Luv</span><span class="p">.</span><span class="nn">Signal</span><span class="p">.</span><span class="n">sigint</span> <span class="k">begin</span> <span class="k">fun</span> <span class="bp">()</span> <span class="o">-&gt;</span>
+</span>    <span class="nn">Luv</span><span class="p">.</span><span class="nn">Handle</span><span class="p">.</span><span class="n">close</span> <span class="n">handle</span> <span class="n">ignore</span><span class="o">;</span>
+    <span class="n">print_endline</span> <span class="s2">&quot;Exiting&quot;</span>
+  <span class="k">end</span><span class="o">;</span>
+
+  <span class="n">print_endline</span> <span class="s2">&quot;Type Ctrl+C to continue...&quot;</span><span class="o">;</span>
+
+  <span class="n">ignore</span> <span class="o">(</span><span class="nn">Luv</span><span class="p">.</span><span class="nn">Loop</span><span class="p">.</span><span class="n">run</span> <span class="bp">()</span> <span class="o">:</span> <span class="kt">bool</span><span class="o">)</span>
+</pre></div>
+</td></tr></table></div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Processes</a><ul>
+<li><a class="reference internal" href="#spawning-child-processes">Spawning child processes</a></li>
+<li><a class="reference internal" href="#child-process-i-o">Child process I/O</a></li>
+<li><a class="reference internal" href="#ipc">IPC</a></li>
+<li><a class="reference internal" href="#signals">Signals</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="threads.html"
+                        title="previous chapter">Threads</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="about.html"
+                        title="next chapter">About</a></p>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="about.html" title="About"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="threads.html" title="Threads"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Luv  documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2012-2016, Nikhil Marathe, 2014-2020 libuv contributors, 2020 Anton Bachin.
+    </div>
+  </body>
+</html>
